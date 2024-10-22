@@ -1,11 +1,12 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Loader2 } from "lucide-react"
 import { fetchRioMythicScore } from "@/utils/api"
+import { useRouter, useSearchParams } from "next/navigation"
 
 interface CharacterScore {
   realm: string
@@ -14,11 +15,59 @@ interface CharacterScore {
 }
 
 export function MythicScore() {
-  const [realm, setRealm] = useState("Tarren Mill")
-  const [character, setCharacter] = useState("Meownificent")
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
+  const [realm, setRealm] = useState("")
+  const [character, setCharacter] = useState("")
   const [characterScores, setCharacterScores] = useState<CharacterScore[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Load initial state from URL
+  useEffect(() => {
+    const charactersParam = searchParams.get("characters")
+    if (charactersParam) {
+      const characters = charactersParam.split(",").map(char => {
+        const [realm, name] = char.split("-")
+        return { realm, name }
+      })
+
+      // Fetch scores for all characters from URL
+      Promise.all(
+        characters.map(async ({ realm, name }) => {
+          try {
+            const scores = await fetchRioMythicScore(realm, name)
+            return {
+              realm,
+              name,
+              scores: scores.mythic_plus_best_runs?.reduce((acc, run) => {
+                acc[run.dungeon] = run.score
+                return acc
+              }, {} as Record<string, number>) || {},
+            }
+          } catch {
+            console.error(`Failed to fetch scores for ${name}-${realm}`)
+            return null
+          }
+        })
+      ).then((results) => {
+        setCharacterScores(results.filter((result): result is CharacterScore => result !== null))
+      })
+    }
+  }, [searchParams])
+
+  // Update URL when character scores change
+  const updateURL = (newScores: CharacterScore[]) => {
+    const params = new URLSearchParams(searchParams)
+    const characters = newScores.map(char => `${char.realm}-${char.name}`).join(",")
+    if (characters) {
+      params.set("characters", characters)
+    } else {
+      params.delete("characters")
+    }
+    router.push(`?${params.toString()}`)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -26,8 +75,8 @@ export function MythicScore() {
     setError(null)
     try {
       const scores = await fetchRioMythicScore(realm, character)
-      setCharacterScores((prev) => [
-        ...prev,
+      const newScores = [
+        ...characterScores,
         {
           realm,
           name: character,
@@ -39,7 +88,9 @@ export function MythicScore() {
             return acc
           }, {} as Record<string, number>) || {},
         },
-      ])
+      ]
+      setCharacterScores(newScores)
+      updateURL(newScores)
       setRealm("")
       setCharacter("")
     } catch {
@@ -47,6 +98,12 @@ export function MythicScore() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleRemoveCharacter = (index: number) => {
+    const newScores = characterScores.filter((_, i) => i !== index)
+    setCharacterScores(newScores)
+    updateURL(newScores)
   }
 
   const { sortedDungeons, averages } = useMemo(() => {
@@ -114,6 +171,7 @@ export function MythicScore() {
                 {sortedDungeons.map((dungeon) => (
                   <TableHead key={dungeon}>{dungeon}</TableHead>
                 ))}
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -124,6 +182,15 @@ export function MythicScore() {
                   {sortedDungeons.map((dungeon) => (
                     <TableCell key={dungeon}>{char.scores[dungeon]}</TableCell>
                   ))}
+                  <TableCell>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => handleRemoveCharacter(index)}
+                    >
+                      Remove
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
               <TableRow>
@@ -135,6 +202,7 @@ export function MythicScore() {
                     {averages[dungeon].toFixed(2)}
                   </TableCell>
                 ))}
+                <TableCell />
               </TableRow>
             </TableBody>
           </Table>
