@@ -215,7 +215,7 @@ export function MythicScore() {
                         {run
                           ? `${run.mythic_level}${
                             "+".repeat(run.num_keystone_upgrades)
-                          } (${run.score})`
+                          } (${run.score.toFixed(0)})`
                           : "N/A"}
                       </TableCell>
                     );
@@ -237,8 +237,8 @@ export function MythicScore() {
                 </TableCell>
                 {sortedDungeons.map((dungeon) => (
                   <TableCell key={dungeon} className="font-bold">
-                    {averages[dungeon].averageLevel.toFixed(2)}{" "}
-                    ({averages[dungeon].averageScore.toFixed(2)})
+                    {averages[dungeon].averageLevel.toFixed(1)}{" "}
+                    ({averages[dungeon].averageScore.toFixed(0)})
                   </TableCell>
                 ))}
                 <TableCell />
