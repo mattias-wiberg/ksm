@@ -14,12 +14,7 @@ import {
 import { Loader2 } from "lucide-react";
 import { fetchRioMythicScore } from "@/utils/api";
 import { useRouter, useSearchParams } from "next/navigation";
-
-interface CharacterScore {
-  realm: string;
-  name: string;
-  scores: Record<string, number>;
-}
+import { RaiderIOProfile } from "@/utils/raiderio.types";
 
 export function MythicScore() {
   const router = useRouter();
@@ -27,7 +22,9 @@ export function MythicScore() {
 
   const [realm, setRealm] = useState("");
   const [character, setCharacter] = useState("");
-  const [characterScores, setCharacterScores] = useState<CharacterScore[]>([]);
+  const [characterProfiles, setCharacterProfiles] = useState<RaiderIOProfile[]>(
+    [],
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,36 +37,34 @@ export function MythicScore() {
         return { realm, name };
       });
 
-      // Fetch scores for all characters from URL
+      // Fetch profiles for all characters from URL
       Promise.all(
         characters.map(async ({ realm, name }) => {
           try {
-            const scores = await fetchRioMythicScore(realm, name);
-            return {
-              realm,
-              name,
-              scores: scores.mythic_plus_best_runs?.reduce((acc, run) => {
-                acc[run.dungeon] = run.score;
-                return acc;
-              }, {} as Record<string, number>) || {},
-            };
+            const profile = await fetchRioMythicScore(realm, name);
+            console.log(`Fetched profile`, profile);
+            return profile;
           } catch {
-            console.error(`Failed to fetch scores for ${name}-${realm}`);
+            console.error(`Failed to fetch profile for ${name}-${realm}`);
             return null;
           }
         }),
       ).then((results) => {
-        setCharacterScores(
-          results.filter((result): result is CharacterScore => result !== null),
+        setCharacterProfiles(
+          results.filter((result): result is RaiderIOProfile =>
+            result !== null
+          ),
         );
       });
     }
   }, [searchParams]);
 
-  // Update URL when character scores change
-  const updateURL = (newScores: CharacterScore[]) => {
+  // Update URL when character profiles change
+  const updateURL = (newProfiles: RaiderIOProfile[]) => {
     const params = new URLSearchParams(searchParams);
-    const characters = newScores.map((char) => `${char.realm}-${char.name}`)
+    const characters = newProfiles.map((profile) =>
+      `${profile.realm}-${profile.name}`
+    )
       .join(",");
     if (characters) {
       params.set("characters", characters);
@@ -84,24 +79,10 @@ export function MythicScore() {
     setLoading(true);
     setError(null);
     try {
-      const scores = await fetchRioMythicScore(realm, character);
-      const newScores = [
-        ...characterScores,
-        {
-          realm,
-          name: character,
-          scores: scores.mythic_plus_best_runs?.reduce((acc, run) => {
-            if (acc[run.dungeon] && acc[run.dungeon] < run.score) {
-              acc[run.dungeon] = run.score;
-            } else if (!acc[run.dungeon]) {
-              acc[run.dungeon] = run.score;
-            }
-            return acc;
-          }, {} as Record<string, number>) || {},
-        },
-      ];
-      setCharacterScores(newScores);
-      updateURL(newScores);
+      const profile = await fetchRioMythicScore(realm, character);
+      const newProfiles = [...characterProfiles, profile];
+      setCharacterProfiles(newProfiles);
+      updateURL(newProfiles);
       setRealm("");
       setCharacter("");
     } catch {
@@ -112,30 +93,40 @@ export function MythicScore() {
   };
 
   const handleRemoveCharacter = (index: number) => {
-    const newScores = characterScores.filter((_, i) => i !== index);
-    setCharacterScores(newScores);
-    updateURL(newScores);
+    const newProfiles = characterProfiles.filter((_, i) => i !== index);
+    setCharacterProfiles(newProfiles);
+    updateURL(newProfiles);
   };
 
   const { sortedDungeons, averages } = useMemo(() => {
-    if (characterScores.length === 0) {
+    if (characterProfiles.length === 0) {
       return { sortedDungeons: [], averages: {} };
     }
 
-    const dungeons = Object.keys(characterScores[0].scores);
+    // Extract all dungeon names from mythic_plus_best_runs
+    const allDungeons = new Set<string>();
+    characterProfiles.forEach((profile) => {
+      profile.mythic_plus_best_runs?.forEach((run) => {
+        allDungeons.add(run.dungeon);
+      });
+    });
+
+    const dungeons = Array.from(allDungeons);
     const averages = dungeons.reduce((acc, dungeon) => {
-      const sum = characterScores.reduce(
-        (sum, char) => sum + char.scores[dungeon],
-        0,
-      );
-      acc[dungeon] = sum / characterScores.length;
+      const sum = characterProfiles.reduce((sum, profile) => {
+        const run = profile.mythic_plus_best_runs?.find((r) =>
+          r.dungeon === dungeon
+        );
+        return sum + (run ? run.score : 0);
+      }, 0);
+      acc[dungeon] = sum / characterProfiles.length;
       return acc;
     }, {} as Record<string, number>);
 
     const sortedDungeons = dungeons.sort((a, b) => averages[b] - averages[a]);
 
     return { sortedDungeons, averages };
-  }, [characterScores]);
+  }, [characterProfiles]);
 
   return (
     <div className="container mx-auto p-4">
@@ -185,7 +176,7 @@ export function MythicScore() {
 
       {error && <p className="text-red-500 mb-4" role="alert">{error}</p>}
 
-      {characterScores.length > 0 && (
+      {characterProfiles.length > 0 && (
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -199,13 +190,20 @@ export function MythicScore() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {characterScores.map((char, index) => (
+              {characterProfiles.map((profile, index) => (
                 <TableRow key={index}>
-                  <TableCell>{char.realm}</TableCell>
-                  <TableCell>{char.name}</TableCell>
-                  {sortedDungeons.map((dungeon) => (
-                    <TableCell key={dungeon}>{char.scores[dungeon]}</TableCell>
-                  ))}
+                  <TableCell>{profile.realm}</TableCell>
+                  <TableCell>{profile.name}</TableCell>
+                  {sortedDungeons.map((dungeon) => {
+                    const run = profile.mythic_plus_best_runs?.find((r) =>
+                      r.dungeon === dungeon
+                    );
+                    return (
+                      <TableCell key={dungeon}>
+                        {run ? run.score : "N/A"}
+                      </TableCell>
+                    );
+                  })}
                   <TableCell>
                     <Button
                       variant="destructive"
