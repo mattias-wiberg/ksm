@@ -11,11 +11,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Cross, CrossIcon, Loader2, TrashIcon } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { fetchRioMythicScore } from "@/utils/api";
 import { useRouter, useSearchParams } from "next/navigation";
 import { RaiderIOProfile } from "@/utils/raiderio.types";
-import { Cross1Icon, Cross2Icon } from "@radix-ui/react-icons";
+import { Cross1Icon } from "@radix-ui/react-icons";
 
 export function MythicScore() {
   const router = useRouter();
