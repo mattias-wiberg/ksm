@@ -114,7 +114,7 @@ export function MythicScore() {
 
     const dungeons = Array.from(allDungeons);
     const averages = dungeons.reduce((acc, dungeon) => {
-      const { totalScore, totalLevel, count } = characterProfiles.reduce(
+      const { totalScore, totalLevel } = characterProfiles.reduce(
         (sums, profile) => {
           const run = profile.mythic_plus_best_runs?.find((r) =>
             r.dungeon === dungeon
