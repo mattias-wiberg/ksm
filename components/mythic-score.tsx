@@ -1,131 +1,150 @@
-"use client"
+"use client";
 
-import { useState, useMemo, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Loader2 } from "lucide-react"
-import { fetchRioMythicScore } from "@/utils/api"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useEffect, useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Loader2 } from "lucide-react";
+import { fetchRioMythicScore } from "@/utils/api";
+import { useRouter, useSearchParams } from "next/navigation";
 
 interface CharacterScore {
-  realm: string
-  name: string
-  scores: Record<string, number>
+  realm: string;
+  name: string;
+  scores: Record<string, number>;
 }
 
 export function MythicScore() {
-  const router = useRouter()
-  const searchParams = useSearchParams()
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
-  const [realm, setRealm] = useState("")
-  const [character, setCharacter] = useState("")
-  const [characterScores, setCharacterScores] = useState<CharacterScore[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [realm, setRealm] = useState("");
+  const [character, setCharacter] = useState("");
+  const [characterScores, setCharacterScores] = useState<CharacterScore[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Load initial state from URL
   useEffect(() => {
-    const charactersParam = searchParams.get("characters")
+    const charactersParam = searchParams.get("characters");
     if (charactersParam) {
-      const characters = charactersParam.split(",").map(char => {
-        const [realm, name] = char.split("-")
-        return { realm, name }
-      })
+      const characters = charactersParam.split(",").map((char) => {
+        const [realm, name] = char.split("-");
+        return { realm, name };
+      });
 
       // Fetch scores for all characters from URL
       Promise.all(
         characters.map(async ({ realm, name }) => {
           try {
-            const scores = await fetchRioMythicScore(realm, name)
+            const scores = await fetchRioMythicScore(realm, name);
             return {
               realm,
               name,
               scores: scores.mythic_plus_best_runs?.reduce((acc, run) => {
-                acc[run.dungeon] = run.score
-                return acc
+                acc[run.dungeon] = run.score;
+                return acc;
               }, {} as Record<string, number>) || {},
-            }
+            };
           } catch {
-            console.error(`Failed to fetch scores for ${name}-${realm}`)
-            return null
+            console.error(`Failed to fetch scores for ${name}-${realm}`);
+            return null;
           }
-        })
+        }),
       ).then((results) => {
-        setCharacterScores(results.filter((result): result is CharacterScore => result !== null))
-      })
+        setCharacterScores(
+          results.filter((result): result is CharacterScore => result !== null),
+        );
+      });
     }
-  }, [searchParams])
+  }, [searchParams]);
 
   // Update URL when character scores change
   const updateURL = (newScores: CharacterScore[]) => {
-    const params = new URLSearchParams(searchParams)
-    const characters = newScores.map(char => `${char.realm}-${char.name}`).join(",")
+    const params = new URLSearchParams(searchParams);
+    const characters = newScores.map((char) => `${char.realm}-${char.name}`)
+      .join(",");
     if (characters) {
-      params.set("characters", characters)
+      params.set("characters", characters);
     } else {
-      params.delete("characters")
+      params.delete("characters");
     }
-    router.push(`?${params.toString()}`)
-  }
+    router.push(`?${params.toString()}`);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError(null)
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
     try {
-      const scores = await fetchRioMythicScore(realm, character)
+      const scores = await fetchRioMythicScore(realm, character);
       const newScores = [
         ...characterScores,
         {
           realm,
           name: character,
           scores: scores.mythic_plus_best_runs?.reduce((acc, run) => {
-            if (acc[run.dungeon] && acc[run.dungeon] < run.score)
-              acc[run.dungeon] = run.score
-            else if (!acc[run.dungeon])
-              acc[run.dungeon] = run.score
-            return acc
+            if (acc[run.dungeon] && acc[run.dungeon] < run.score) {
+              acc[run.dungeon] = run.score;
+            } else if (!acc[run.dungeon]) {
+              acc[run.dungeon] = run.score;
+            }
+            return acc;
           }, {} as Record<string, number>) || {},
         },
-      ]
-      setCharacterScores(newScores)
-      updateURL(newScores)
-      setRealm("")
-      setCharacter("")
+      ];
+      setCharacterScores(newScores);
+      updateURL(newScores);
+      setRealm("");
+      setCharacter("");
     } catch {
-      setError("Failed to fetch mythic score. Please try again.")
+      setError("Failed to fetch mythic score. Please try again.");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleRemoveCharacter = (index: number) => {
-    const newScores = characterScores.filter((_, i) => i !== index)
-    setCharacterScores(newScores)
-    updateURL(newScores)
-  }
+    const newScores = characterScores.filter((_, i) => i !== index);
+    setCharacterScores(newScores);
+    updateURL(newScores);
+  };
 
   const { sortedDungeons, averages } = useMemo(() => {
-    if (characterScores.length === 0) return { sortedDungeons: [], averages: {} }
+    if (characterScores.length === 0) {
+      return { sortedDungeons: [], averages: {} };
+    }
 
-    const dungeons = Object.keys(characterScores[0].scores)
+    const dungeons = Object.keys(characterScores[0].scores);
     const averages = dungeons.reduce((acc, dungeon) => {
-      const sum = characterScores.reduce((sum, char) => sum + char.scores[dungeon], 0)
-      acc[dungeon] = sum / characterScores.length
-      return acc
-    }, {} as Record<string, number>)
+      const sum = characterScores.reduce(
+        (sum, char) => sum + char.scores[dungeon],
+        0,
+      );
+      acc[dungeon] = sum / characterScores.length;
+      return acc;
+    }, {} as Record<string, number>);
 
-    const sortedDungeons = dungeons.sort((a, b) => averages[b] - averages[a])
+    const sortedDungeons = dungeons.sort((a, b) => averages[b] - averages[a]);
 
-    return { sortedDungeons, averages }
-  }, [characterScores])
+    return { sortedDungeons, averages };
+  }, [characterScores]);
 
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">WoW Mythic Score Lookup</h1>
       <form onSubmit={handleSubmit} className="mb-4 space-y-4">
-        <label htmlFor="realm" className="block text-sm font-medium text-gray-700">
+        <label
+          htmlFor="realm"
+          className="block text-sm font-medium text-gray-700 dark:text-white"
+        >
           Realm
         </label>
         <Input
@@ -136,7 +155,10 @@ export function MythicScore() {
           required
           className="mt-1"
         />
-        <label htmlFor="character" className="block text-sm font-medium text-gray-700">
+        <label
+          htmlFor="character"
+          className="block text-sm font-medium text-gray-700 dark:text-white"
+        >
           Character Name
         </label>
         <Input
@@ -148,14 +170,16 @@ export function MythicScore() {
           className="mt-1"
         />
         <Button type="submit" disabled={loading}>
-          {loading ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Fetching...
-            </>
-          ) : (
-            "Add Character"
-          )}
+          {loading
+            ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Fetching...
+              </>
+            )
+            : (
+              "Add Character"
+            )}
         </Button>
       </form>
 
@@ -209,5 +233,5 @@ export function MythicScore() {
         </div>
       )}
     </div>
-  )
+  );
 }
