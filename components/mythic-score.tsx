@@ -15,6 +15,7 @@ import { Loader2 } from "lucide-react";
 import { fetchRioMythicScore } from "@/utils/api";
 import { useRouter, useSearchParams } from "next/navigation";
 import { RaiderIOProfile } from "@/utils/raiderio.types";
+import { Cross1Icon } from "@radix-ui/react-icons";
 
 export function MythicScore() {
   const router = useRouter();
@@ -113,17 +114,30 @@ export function MythicScore() {
 
     const dungeons = Array.from(allDungeons);
     const averages = dungeons.reduce((acc, dungeon) => {
-      const sum = characterProfiles.reduce((sum, profile) => {
-        const run = profile.mythic_plus_best_runs?.find((r) =>
-          r.dungeon === dungeon
-        );
-        return sum + (run ? run.score : 0);
-      }, 0);
-      acc[dungeon] = sum / characterProfiles.length;
+      const { totalScore, totalLevel } = characterProfiles.reduce(
+        (sums, profile) => {
+          const run = profile.mythic_plus_best_runs?.find((r) =>
+            r.dungeon === dungeon
+          );
+          if (run) {
+            sums.totalScore += run.score;
+            sums.totalLevel += run.mythic_level;
+            sums.count += 1;
+          }
+          return sums;
+        },
+        { totalScore: 0, totalLevel: 0, count: 0 },
+      );
+      acc[dungeon] = {
+        averageScore: totalScore / characterProfiles.length,
+        averageLevel: totalLevel / characterProfiles.length,
+      };
       return acc;
-    }, {} as Record<string, number>);
+    }, {} as Record<string, { averageScore: number; averageLevel: number }>);
 
-    const sortedDungeons = dungeons.sort((a, b) => averages[b] - averages[a]);
+    const sortedDungeons = dungeons.sort(
+      (a, b) => averages[b].averageScore - averages[a].averageScore,
+    );
 
     return { sortedDungeons, averages };
   }, [characterProfiles]);
@@ -181,18 +195,16 @@ export function MythicScore() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Realm</TableHead>
                 <TableHead>Character</TableHead>
                 {sortedDungeons.map((dungeon) => (
                   <TableHead key={dungeon}>{dungeon}</TableHead>
                 ))}
-                <TableHead>Actions</TableHead>
+                <TableHead />
               </TableRow>
             </TableHeader>
             <TableBody>
               {characterProfiles.map((profile, index) => (
                 <TableRow key={index}>
-                  <TableCell>{profile.realm}</TableCell>
                   <TableCell>{profile.name}</TableCell>
                   {sortedDungeons.map((dungeon) => {
                     const run = profile.mythic_plus_best_runs?.find((r) =>
@@ -200,7 +212,11 @@ export function MythicScore() {
                     );
                     return (
                       <TableCell key={dungeon}>
-                        {run ? run.score : "N/A"}
+                        {run
+                          ? `${run.mythic_level}${
+                            "+".repeat(run.num_keystone_upgrades)
+                          } (${run.score.toFixed(0)})`
+                          : "N/A"}
                       </TableCell>
                     );
                   })}
@@ -210,18 +226,19 @@ export function MythicScore() {
                       size="sm"
                       onClick={() => handleRemoveCharacter(index)}
                     >
-                      Remove
+                      <Cross1Icon className="h-4 w-4" />
                     </Button>
                   </TableCell>
                 </TableRow>
               ))}
               <TableRow>
-                <TableCell className="font-bold" colSpan={2}>
+                <TableCell className="font-bold" colSpan={1}>
                   Average
                 </TableCell>
                 {sortedDungeons.map((dungeon) => (
                   <TableCell key={dungeon} className="font-bold">
-                    {averages[dungeon].toFixed(2)}
+                    {averages[dungeon].averageLevel.toFixed(1)}{" "}
+                    ({averages[dungeon].averageScore.toFixed(0)})
                   </TableCell>
                 ))}
                 <TableCell />
